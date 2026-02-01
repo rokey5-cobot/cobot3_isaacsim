@@ -106,9 +106,9 @@ ros2 run my_examples move_joint_fin --ros-args \
 
 ## 📊 Project Results
 
-  * [cite_start]**Detection Accuracy:** mAP50-95 기준 **90% 이상** 달성 [cite: 140]
+  * **Detection Accuracy:** mAP50-95 기준 **90% 이상** 달성
 
-  * [cite_start]**Pose Estimation Error:** 평균 오차 **5도 내외**로 정밀 보정 성공 [cite: 382]
+  * **Pose Estimation Error:** 평균 오차 **5도 내외**로 정밀 보정 성공
 
   * **Impact:** 불량 부품의 자동 재정렬을 통해 공정 병목 현상 해소 및 생산 효율 증대 기대
 
