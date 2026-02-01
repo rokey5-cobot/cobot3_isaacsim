@@ -1,114 +1,124 @@
-# 🤖 Digital Twin-based Service Robot Operating System
-### 디지털 트윈 기반 서비스 로봇 운영 시스템 (Team F-1)
+# 🤖 Isaac Sim & YOLOv8-OBB based 3D Pose Correction System
 
-![ROS2](https://img.shields.io/badge/ROS2-Humble-blue?style=flat&logo=ros)
-![Isaac Sim](https://img.shields.io/badge/Simulator-NVIDIA_Isaac_Sim-green?style=flat&logo=nvidia)
-![YOLOv8](https://img.shields.io/badge/AI-YOLOv8__OBB-red?style=flat&logo=ultralytics)
-![Python](https://img.shields.io/badge/Language-Python_3.10-yellow?style=flat&logo=python)
+<img width="1404" height="947" alt="image" src="https://github.com/user-attachments/assets/22f419b0-5c83-4b87-8556-04bc781fbfb8" />
 
-> **"실제 공정에서 발생하는 문제를 디지털 환경에서 먼저 정확하게 재현하고 해결하여 현실에 적용한다."**
 
 <br>
 
-## 1. 프로젝트 개요 (Project Overview)
+## 🗂️ 목차
 
-### 📌 배경 및 목적
-산업 현장(자동차 제조 라인, 물류 센터 등)의 컨베이어 벨트 위에서 물체가 이동 중 미세하게 틀어지거나 정렬 불량이 발생할 경우, 로봇이 정확하게 잡지 못해 공정 중단이나 사고가 발생합니다.
-
-본 프로젝트는 **NVIDIA Isaac Sim**을 활용한 디지털 트윈 환경에서 **YOLOv8-OBB(Oriented Bounding Box)** 기술을 적용하여 물체의 위치와 **회전 각도**를 실시간으로 인식하고, **UR10 로봇**이 이를 자동으로 보정(Pick & Place)하는 시스템을 구축했습니다.
-
-### 🎯 기대 효과
-* **공정 오류 해결:** 컨베이어 위 박스 충돌, 전복, 위치 틀어짐으로 인한 자동화 설비 오류 해결
-* **작업자 안전:** 불규칙한 물체 정렬을 위해 작업자가 개입하다 발생하는 끼임 사고 예방
-* **생산성 향상:** 공정 병목 현상 해결 및 불량률 감소
-
-<br>
-
-## 2. 팀원 및 역할 (Team Members)
-
-| 이름 | 역할 | 담당 업무 상세 |
-|:---:|:---:|:---|
-| **김정욱** | 팀장 | • Isaac Sim 환경 구성 (Conveyor, Robot, Sensors) <br> • UR10 로봇 움직임(Manipulation) 구현 <br> • 프로젝트 총괄 및 환경 통합 |
-| **이효원** | 팀원 | • YOLO-OBB 모델 학습 및 데이터 처리 <br> • ROS2 연동 (Topic Publish/Subscribe) <br> • 2D-3D 좌표 변환 알고리즘 구현 |
-| **김다빈** | 팀원 | • 데이터셋 수집 및 레이블링 (Roboflow) <br> • 프로젝트 문서화 및 PPT 제작 <br> • 시나리오 기획 및 아이디어 구체화 |
+1. [Project Overview](#-project-overview)
+2. [Team & Roles](#-team--roles)
+3. [System Architecture](#-system-architecture)
+4. [Tech Stack](#-tech-stack)
+5. [Key Features & Logic](#-key-features--logic)
+6. [Run Instructions](#-run-instructions)
+7. [Project Results](#-project-results)
+8. [Demo Video](#-demo-video)
 
 <br>
-
-## 3. 기술 스택 (Tech Stack)
-
-### 💻 Environment
-* **OS:** Ubuntu 22.04 LTS
-* **GPU:** NVIDIA GeForce RTX Series (RTX 5080/3080 Laptop GPU)
-* **Simulator:** NVIDIA Isaac Sim (Replicator 활용)
-
-### 🛠️ Tools & Libraries
-* **Middleware:** ROS 2 Humble
-* **AI Model:** YOLOv8n-obb (Oriented Bounding Box)
-* **Vision:** OpenCV, Realsense SDK (Simulated: RGB + Depth)
-* **Labeling:** Roboflow (Polygon Labeling)
-
-<br>
-
-## 4. 시스템 구조 (System Architecture)
-
-시스템은 **Input → Perception → Estimation → Control**의 흐름으로 동작합니다.
-
-### 4.1. Perception (인식)
-* **Sensor:** Isaac Sim 내 Realsense D455 카메라 (RGB + Depth)
-* **Detection:** YOLOv8-obb 모델이 컨베이어 위 물체를 감지하여 중심점($x_c, y_c$), 크기, **회전 각도($\theta$)** 를 추출합니다.
-
-### 4.2. 3D Pose Estimation (좌표 변환)
-2D 이미지 좌표를 로봇이 이해할 수 있는 3D 월드 좌표로 변환하기 위해 카메라의 Intrinsic Parameter와 Depth 값을 사용합니다.
-
-$$
-x = \frac{(x_c - c_x) \times z}{f_x}
-$$
-
-$$
-y = \frac{(y_c - c_y) \times z}{f_y}
-$$
-
-$$
-z = \text{depth}
-$$
-
-* ($f_x, f_y$): Focal Length (초점 거리)
-* ($c_x, c_y$): Principal Point (주점)
-* **Result:** 계산된 3D 좌표와 회전 정보는 ROS 2 Topic으로 발행(Publish)됩니다.
-
-### 4.3. Robot Control (제어)
-* **판단:** 물체의 회전 각도가 설정된 **Threshold(임계값)** 이상일 경우 "보정 필요"로 판단합니다.
-* **동작:** UR10 로봇이 해당 좌표로 이동하여 물체를 집어(Pick) 올바른 자세로 교정 후 다시 배치(Place)합니다.
-
-<br>
-
-## 5. 프로젝트 결과 (Results)
-
-### 📊 AI 모델 학습 결과
-* **데이터셋:** 총 1,016장 (Train 931 / Test 74)
-* **Augmentation:** Flip, Brightness 적용
-* **성능 지표:**
-    * **mAP50:** 0.9950 (99.5%)
-    * **mAP50-95:** 0.90 이상
-    * **Confidence:** 평균 80% 이상
-
-### 🤖 시뮬레이션 성능
-* **각도 오차:** 평균 1~2도 내외 (허용 오차 범위 내 진입)
-* **위치 오차:** 3D 공간 상에서 평균 5도(°) 이내의 오차
-* **성과:** $2D \rightarrow 3D$ Pose 변환 성공 및 로봇 제어를 통한 정렬 자동화 구현
-
-<br>
-
-## 6. 한계점 및 향후 발전 방향 (Limitations & Future Work)
-
-### Limitations
-1.  **각도 인식 범위 (Yaw Limit):** 현재 모델은 0~90도 사이의 각도만 판단 가능하며, 대칭 물체의 방향성(180도 등) 구분 불가.
-2.  **단일 객체 한정:** 특정 부품 1종에 대해서만 학습되어, 다양한 부품이 혼재된 라인 처리 불가.
-
-### Future Work
-1.  **Vector 기반 학습:** 모델 레이어에 벡터 값을 추가하여 90도 이상의 회전 각도도 판단할 수 있도록 개선.
-2.  **Multi-Class 확장:** 다양한 부품을 학습시켜 하나의 컨베이어 벨트에서 여러 종류의 불량을 선별 및 보정하도록 고도화.
-3.  **로봇 제어 정밀화:** 단순히 위치로 이동하는 것을 넘어, 로봇 그리퍼가 물체의 형상과 각도에 맞춰 회전하며 잡는 정밀 제어 구현.
 
 ---
-**Developers:** Team F-1 (Kim Jeong-wook, Lee Hyo-won, Kim Da-bin)
+
+## 🔍 Project Overview
+스마트 팩토리 공정에서 컨베이어 벨트 위의 부품이 미세하게 틀어지거나(Orientation Error) 뒤집혀 발생하는 병목 현상을 해결하기 위한 **Digital Twin 기반 로봇 제어 시스템**입니다. 
+
+실제 환경을 **NVIDIA Isaac Sim**으로 완벽하게 구현하고, **YOLOv8-OBB**를 통해 객체의 회전 각도까지 정밀하게 인식하여 로봇이 자동으로 정렬(Pick & Place)하는 자동화 프로세스를 구축했습니다.
+
+<br>
+
+## 👥 Team & Roles
+
+| Name | Role | Responsibility |
+|:---:|:---:|:---|
+| **Kim Jung-wook** | Team Leader <br> Robotics Engineer | - **Isaac Sim Environment Setup:** 실제 공장 환경(조명, 컨베이어, 로봇) Digital Twin 구축 <br> - **Robot Manipulation:** ROS2 기반 제어 노드 작성 및 Pick & Place 모션 플래닝 <br> - **System Integration:** Vision 데이터와 Robot Control 간 통신 최적화 |
+| **Lee Hyo-won** | AI & System Engineer | - **YOLO Training:** Custom Dataset을 활용한 YOLOv8-OBB 모델 학습 및 튜닝 <br> - **ROS Integration:** AI 추론 결과(B-Box, Angle)를 ROS2 토픽으로 발행(Publish) |
+| **Kim Da-bin** | Data Engineer & PM | - **Data Pipeline:** Roboflow 활용 학습 데이터셋 구축 및 레이블링(Labeling) <br> - **Documentation:** 산출물 관리, 발표 자료 및 시연 시나리오 기획 |
+
+<br>
+
+## 🛠 System Architecture
+
+<img width="2034" height="570" alt="image" src="https://github.com/user-attachments/assets/d89a93c0-da07-4d6d-b926-2c1c53a708e0" />
+
+
+이 시스템은 **Perception(인지) → Decision(판단) → Control(제어)**의 유기적인 데이터 파이프라인으로 구성됩니다.
+
+1.  **Vision Node (`obb_node.py`):** RGB-D 카메라 데이터를 받아 YOLO 추론 및 3D 좌표 변환 수행. 노이즈 제거 후 타겟 좌표 발행.
+2.  **Control Node (`move_joint.py`):** 타겟 좌표를 수신하여 역기구학(IK) 기반이 아닌, 관절(Joint) 단위의 정밀 시퀀스 제어 수행.
+3.  **Simulation (Isaac Sim):** 실제 물리 엔진이 적용된 환경에서 로봇과 그리퍼가 상호작용.
+
+<img width="1268" height="1045" alt="image" src="https://github.com/user-attachments/assets/dc735a11-7782-4bf6-9cf9-f7a859be7c35" />
+
+
+<br>
+
+## 💻 Tech Stack
+
+| Category | Technology |
+| :---: | :--- |
+| **Simulation** | ![IsaacSim](https://img.shields.io/badge/NVIDIA-Isaac_Sim-76B900?style=flat-square&logo=nvidia) ![Omniverse](https://img.shields.io/badge/NVIDIA-Omniverse-76B900?style=flat-square&logo=nvidia) |
+| **OS / Middleware** | ![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04-E95420?style=flat-square&logo=ubuntu) ![ROS2](https://img.shields.io/badge/ROS2-Humble-22314E?style=flat-square&logo=ros) |
+| **AI / Vision** | ![YOLOv8](https://img.shields.io/badge/YOLO-v8_OBB-00FFFF?style=flat-square) ![OpenCV](https://img.shields.io/badge/OpenCV-4.x-5C3EE8?style=flat-square&logo=opencv) ![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=flat-square&logo=pytorch) |
+| **Hardware** | Doosan M0609, Intel RealSense D455 |
+| **Language** | ![Python](https://img.shields.io/badge/Python-3.10-3776AB?style=flat-square&logo=python) |
+
+<br>
+
+## 🚀 Key Features & Logic
+
+### 1. Robust Detection with Debounce Logic
+단순히 객체를 인식하는 것을 넘어, 현장의 조명이나 노이즈로 인한 오작동을 방지하기 위해 **Debounce 알고리즘**을 적용했습니다.
+* **Logic:** `defect_need` (기본값 5프레임) 이상 연속으로 불량이 감지될 때만 로봇에게 신호를 보냅니다. 반대로 `ok_need` 프레임 이상 정상이 유지되어야 상태를 해제합니다.
+* **Benefit:** 센서 데이터가 순간적으로 튀어서 로봇이 오작동하는 문제를 원천 차단했습니다.
+
+### 2. Motion Sequencing State Machine
+로봇의 움직임을 단일 명령이 아닌 **4단계 상태 머신(State Machine)**으로 정교하게 제어합니다.
+* **Step 1 Approach:** 타겟 좌표의 상단(`approach_pose`)으로 안전하게 진입
+* **Step 2 Pick:** 계산된 좌표로 하강하여 그리퍼 작동 (Visualizing Gripper Close)
+* **Step 3 Retreat:** 물체를 파지한 채 안전 높이로 상승
+* **Step 4 Return:** 홈 포지션 복귀
+
+### 3. Hybrid Pose Correction (Hint Gain)
+비전 센서의 계측 오차를 보정하기 위해 **Base Pose + Vision Offset** 방식을 사용했습니다.
+* 미리 정의된 `pick_base` 좌표에 비전 센서가 감지한 편차(Delta)에 가중치(`hint_gain`)를 적용하여 최종 목표 좌표를 생성합니다. 이를 통해 완전한 Blind Control보다 유연하고, Full Vision Control보다 안정적인 파지가 가능합니다.
+
+<br>
+
+## ▶ Run Instructions
+
+본 프로젝트는 ROS2 패키지로 구성되어 있으며, 주요 노드는 파라미터를 통해 튜닝 가능합니다.
+
+
+### 1. Vision Node 실행 (YOLO 모델 경로 및 민감도 설정)
+ros2 run yolo_obb_3d obb_node_fin --ros-args \
+    -p model_path:="/path/to/best.pt" \
+    -p defect_need:=5 \
+    -p minangle_deg:=10.0
+
+### 2. Control Node 실행 (동작 속도 및 홈 포지션 설정)
+ros2 run my_examples move_joint_fin --ros-args \
+    -p approach_sec:=1.5 \
+    -p pick_sec:=1.0 \
+    -p hint_gain:=0.8
+
+<br>
+
+## 📊 Project Results
+
+  * [cite_start]**Detection Accuracy:** mAP50-95 기준 **90% 이상** 달성 [cite: 140]
+
+  * [cite_start]**Pose Estimation Error:** 평균 오차 **5도 내외**로 정밀 보정 성공 [cite: 382]
+
+  * **Impact:** 불량 부품의 자동 재정렬을 통해 공정 병목 현상 해소 및 생산 효율 증대 기대
+
+<img width="2054" height="1059" alt="image" src="https://github.com/user-attachments/assets/13ff309c-a427-4bb5-affb-d1f57412b034" />
+
+<img width="1936" height="941" alt="image" src="https://github.com/user-attachments/assets/2a96205d-1071-4fd6-8c0b-5bb80f382293" />
+
+
+<br>
+
+## 🎥 Demo Video
+
+https://youtu.be/bfyb3jnT2ic
